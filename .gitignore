@@ -1,2 +1,7 @@
 #ambiente virtual
 env3119/
+env31210/
+
+#outros
+.ini
+.code-workspace
