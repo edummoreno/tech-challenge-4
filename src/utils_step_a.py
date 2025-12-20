@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from deepface import DeepFace
 import face_recognition
+import re
 
 
 # ============================================================
@@ -334,7 +335,9 @@ def carregar_banco_faces(pasta_imagens: str):
     for arquivo in os.listdir(pasta_imagens):
         if arquivo.lower().endswith(('.jpg', '.jpeg', '.png')):
             caminho = os.path.join(pasta_imagens, arquivo)
-            nome_pessoa = os.path.splitext(arquivo)[0].replace("_", " ").title()
+            # Remove números e sufixos (tudo que for dígito ou underline no final)
+            raw_name = os.path.splitext(arquivo)[0]
+            nome_pessoa = re.sub(r'[0-9_]+$', '', raw_name).replace("_", " ").strip().title()
             
             try:
                 imagem = face_recognition.load_image_file(caminho)

@@ -33,7 +33,7 @@ def criar_config() -> dict:
         "RESUMO_SAIDA": "outputs/stepA_summary.txt",
 
         # amostragem temporal (performance)
-        "FRAME_STEP": 3,
+        "FRAME_STEP": 2,
 
         # deepface / detecção
         "DETECTOR_BACKEND": "opencv",
