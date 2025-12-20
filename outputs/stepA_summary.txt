@@ -1,5 +1,5 @@
 === PASSO A — Reconhecimento Facial + Emoções ===
-Vídeo: data\input.mp4
+Vídeo: data/input.mp4
 Frames totais: 4295
 Frames analisados (amostragem, step=3): 1431
 Total de faces detectadas (após filtros): 871

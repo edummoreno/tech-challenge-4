@@ -7,3 +7,6 @@ env31210/
 .code-workspace
 .python-version
 pdf_depara_to_csv.py
+__pycache__/
+tree.txt
+outputs/*.mp4

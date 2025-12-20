@@ -56,7 +56,7 @@ def criar_config() -> dict:
 # ============================================================
 # FUNÇÃO PRINCIPAL
 # ============================================================
-def main():
+def run_faces_emotions():
     cfg = criar_config()
 
     # garante pasta outputs
@@ -254,4 +254,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_faces_emotions()
