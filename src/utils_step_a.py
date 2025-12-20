@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 from deepface import DeepFace
+import face_recognition
 
 
 # ============================================================
@@ -275,23 +276,22 @@ def analisar_emocao(face_crop_bgr):
 # DESENHO / SAÍDAS
 # ============================================================
 def desenhar_anotacoes(frame_bgr, faces_validas: list, largura: int, altura: int):
-    """Desenha bounding box e texto no frame."""
     for f in faces_validas:
         x, y, w, h = f["x"], f["y"], f["w"], f["h"]
         emocao = f["emocao"]
-        score = f["score"]
+        # Pega o nome (se não tiver, usa Desconhecido)
+        nome = f.get("nome", "Desconhecido") 
 
-        # clamp para evitar sair do frame
-        x = max(0, min(x, largura - 1))
-        y = max(0, min(y, altura - 1))
-        w = max(0, min(w, largura - x))
-        h = max(0, min(h, altura - y))
+        # Cor: Verde se conhecido, Laranja se desconhecido
+        cor = (0, 255, 0) if nome != "Desconhecido" else (0, 165, 255)
 
-        cv2.rectangle(frame_bgr, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        texto = f"{emocao} ({score:.0f}%)"
+        cv2.rectangle(frame_bgr, (x, y), (x + w, y + h), cor, 2)
+        
+        # Texto: Nome | Emoção
+        texto = f"{nome} | {emocao}"
         cv2.putText(
             frame_bgr, texto, (x, max(20, y - 10)),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor, 2
         )
 
 
@@ -315,3 +315,60 @@ def escrever_resumo(caminho_resumo: str, dados: dict):
         f.write("Top emoções:\n")
         for emocao, qtd in dados["contador_emocoes"].most_common(10):
             f.write(f"- {emocao}: {qtd}\n")
+
+
+# ============================================================
+# NOVO: RECONHECIMENTO FACIAL (Quem é?)
+# ============================================================
+def carregar_banco_faces(pasta_imagens: str):
+    """Lê a pasta, aprende os rostos e retorna encodings + nomes."""
+    known_encodings = []
+    known_names = []
+    
+    if not os.path.exists(pasta_imagens):
+        print(f"⚠️ Pasta '{pasta_imagens}' não existe. Criando vazia...")
+        os.makedirs(pasta_imagens, exist_ok=True)
+        return [], []
+
+    print(f"📂 Carregando identidades de: {pasta_imagens}")
+    for arquivo in os.listdir(pasta_imagens):
+        if arquivo.lower().endswith(('.jpg', '.jpeg', '.png')):
+            caminho = os.path.join(pasta_imagens, arquivo)
+            nome_pessoa = os.path.splitext(arquivo)[0].replace("_", " ").title()
+            
+            try:
+                imagem = face_recognition.load_image_file(caminho)
+                encodings = face_recognition.face_encodings(imagem)
+                if encodings:
+                    known_encodings.append(encodings[0])
+                    known_names.append(nome_pessoa)
+                    print(f"  ✅ Aprendido: {nome_pessoa}")
+            except Exception as e:
+                print(f"  ❌ Erro em {arquivo}: {e}")
+                
+    return known_encodings, known_names
+
+def reconhecer_identidade(face_crop_bgr, known_encodings, known_names):
+    """Compara o recorte do rosto com o banco de dados."""
+    if not known_encodings or face_crop_bgr.size == 0:
+        return "Desconhecido"
+
+    # Converter BGR -> RGB
+    face_rgb = cv2.cvtColor(face_crop_bgr, cv2.COLOR_BGR2RGB)
+    h, w, _ = face_rgb.shape
+    
+    # Gera encoding do recorte
+    face_encodings = face_recognition.face_encodings(face_rgb, known_face_locations=[(0, w, h, 0)])
+    
+    if not face_encodings:
+        return "Desconhecido"
+    
+    # Compara
+    distancias = face_recognition.face_distance(known_encodings, face_encodings[0])
+    melhor_match_idx = np.argmin(distancias)
+    
+    # Limiar (0.55 é um bom equilíbrio)
+    if distancias[melhor_match_idx] < 0.55:
+        return known_names[melhor_match_idx]
+    
+    return "Desconhecido"

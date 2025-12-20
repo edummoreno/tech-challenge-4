@@ -16,17 +16,19 @@ from utils_step_a import (
     recortar_rosto,
     analisar_emocao,
     desenhar_anotacoes,
-    escrever_resumo
+    escrever_resumo,
+    carregar_banco_faces,      # <--- Importante
+    reconhecer_identidade      # <--- Importante
 )
 
 # ============================================================
 # CONFIG (didático)
 # ============================================================
-# A ideia aqui é deixar tudo “visível” e fácil de mexer, sem globals espalhados.
 def criar_config() -> dict:
     return {
         # caminhos
         "VIDEO_ENTRADA": "data/input.mp4",
+        "PASTA_FACES_CONHECIDAS": "data/known_faces", # <--- Config da pasta de fotos
         "VIDEO_SAIDA": "outputs/stepA_annotated.mp4",
         "RESUMO_SAIDA": "outputs/stepA_summary.txt",
 
@@ -62,6 +64,9 @@ def run_faces_emotions():
     # garante pasta outputs
     garantir_diretorio("outputs")
 
+    # 1. CARREGAR CONHECIMENTOS (FOTOS)
+    known_encodings, known_names = carregar_banco_faces(cfg["PASTA_FACES_CONHECIDAS"])
+
     # abre vídeo e lê metadados
     cap = abrir_video(cfg["VIDEO_ENTRADA"])
     info = ler_metadados_video(cap)
@@ -78,8 +83,6 @@ def run_faces_emotions():
     # ============================================================
     # LIMIARES (fallback inicial “frouxo”)
     # ============================================================
-    # Por quê?
-    # - Evita “nascer travado” antes do warm-up aprender os limiares do vídeo.
     limiares = {
         "MIN_AREA_FACE": 40 * 40,
         "MAX_AREA_FACE": int(0.60 * area_frame),
@@ -100,11 +103,13 @@ def run_faces_emotions():
 
     # contadores para summary
     contador_emocoes = Counter()
+    # (Opcional) contador de quem apareceu
+    # contador_identidades = Counter() 
+
     frames_analisados = 0
     total_faces = 0
 
     # “memória” das faces do último frame analisado
-    # (para desenhar mesmo nos frames pulados)
     faces_ultimo_frame = []
 
     barra = tqdm(total=total_frames if total_frames > 0 else None, desc="Passo A — Faces + Emoções")
@@ -124,7 +129,6 @@ def run_faces_emotions():
         # ------------------------------------------------------------
         # AMOSTRAGEM TEMPORAL
         # ------------------------------------------------------------
-        # Só fazemos detecção+emoção a cada N frames (performance).
         if indice_frame % cfg["FRAME_STEP"] == 0:
             try:
                 faces_detectadas = detectar_faces(
@@ -152,34 +156,24 @@ def run_faces_emotions():
 
                     area, ar = calcular_area_e_ar(w, h)
 
-                    # ====================================================
-                    # PATCH 1 — AUTOAJUSTE (warm-up)
-                    # ====================================================
+                    # PATCH 1 — AUTOAJUSTE
                     if not auto.limiares_definidos:
                         auto.adicionar_amostra(area, ar, dados["tem_confianca"], dados["confianca"])
                         if auto.pronto_para_definir():
                             limiares = auto.definir_limiares(limiares)
 
-                    # ====================================================
-                    # PATCH 1 — FILTROS GEOMÉTRICOS
-                    # ====================================================
+                    # PATCH 1 & 2 — FILTROS
                     if not passa_filtros_geometricos(area, ar, limiares):
                         continue
-
-                    # ====================================================
-                    # PATCH 2 — FILTRO POR CONFIANÇA (se existir)
-                    # ====================================================
                     if not passa_filtro_confianca(dados["tem_confianca"], dados["confianca"], limiares):
                         continue
 
-                    # ====================================================
-                    # PATCH 3 — PERSISTÊNCIA TEMPORAL
-                    # ====================================================
+                    # PATCH 3 — PERSISTÊNCIA
                     if not passa_persistencia(historico_ids, x, y, cfg["TAMANHO_GRID"], cfg["K_PERSISTENCIA"]):
                         continue
 
                     # ====================================================
-                    # EMOÇÃO (crop do frame original + analyze)
+                    # 1. RECORTE E ANÁLISE DE EMOÇÃO
                     # ====================================================
                     face_crop = recortar_rosto(
                         frame_bgr=frame,
@@ -189,17 +183,31 @@ def run_faces_emotions():
                     )
 
                     resultado = analisar_emocao(face_crop)
+                    
+                    # Se falhar a emoção, pula essa face
                     if resultado is None:
                         continue
 
+                    # Extrai dados da emoção AGORA (antes de usar no append)
                     emocao = resultado.get("dominant_emotion", "unknown")
                     dist = resultado.get("emotion", {}) or {}
                     score = float(dist.get(emocao, 0.0)) if isinstance(dist, dict) else 0.0
 
+                    # ====================================================
+                    # 2. IDENTIFICAÇÃO (QUEM É?)
+                    # ====================================================
+                    nome_identificado = "Desconhecido"
+                    if known_encodings:
+                        nome_identificado = reconhecer_identidade(face_crop, known_encodings, known_names)
+
+                    # ====================================================
+                    # 3. SALVAR TUDO (UMA ÚNICA VEZ)
+                    # ====================================================
                     faces_validas.append({
                         "x": x, "y": y, "w": w, "h": h,
                         "emocao": emocao,
-                        "score": score
+                        "score": score,
+                        "nome": nome_identificado
                     })
 
                 faces_ultimo_frame = faces_validas
