@@ -1,0 +1,27 @@
+========================================
+   RELATÓRIO FINAL - TECH CHALLENGE 4   
+========================================
+
+1. RESUMO EXECUTIVO
+-------------------
+O vídeo foi processado para análise comportamental e emocional.
+⚠️ ALERTA: Foram detectadas 4 ocorrências de anomalia (Gestos Bruscos/Braços Levantados).
+Recomenda-se revisão humana nesses trechos.
+
+2. ANÁLISE DE ATIVIDADES (STEP B)
+---------------------------------
+- Bracos Cruzados/Fechado: 1150 frames
+- Mao no Rosto/Pensativo: 381 frames
+- Maos Juntas: 260 frames
+- Bracos Levantados: 4 frames
+
+3. ANÁLISE EMOCIONAL (STEP A)
+-----------------------------
+Distribuição das emoções detectadas nos rostos:
+- happy: 2
+- neutral: 1
+- sad: 1
+- angry: 1
+
+========================================
+Gerado automaticamente pelo Pipeline IADT.

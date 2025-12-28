@@ -1,266 +1,153 @@
+# Pipeline de Processamento (Detalhes Técnicos)
+
+Este documento descreve as heurísticas, fórmulas matemáticas e otimizações de **engenharia de software** e **visão computacional** implementadas nos scripts `src/`.
+
+---
+
+# Engenharia de Performance (Otimizações)
+
+Para garantir o processamento próximo ao tempo real (*Real-Time Inference*), implementamos duas otimizações críticas na camada de I/O e no motor de inferência.
+
+## 1. Leitura Assíncrona (I/O Threading)
+
+A leitura de frames via `cv2.VideoCapture.read()` é uma operação bloqueante (I/O Bound). No modelo sequencial padrão, a GPU/CPU fica ociosa enquanto o disco lê o próximo frame.
+
+**Implementação:**
+Utilizamos o padrão **Producer-Consumer**. Uma *Thread* dedicada lê os frames e os coloca em uma fila (Buffer/Queue), enquanto a *Thread Principal* consome esses frames para processamento.
+
+**Ganho Teórico:**
+Seja $t_{read}$ o tempo de leitura e $t_{proc}$ o tempo de processamento (inferência).
+
+- **Sem Threading (Sequencial):**
+  $$
+  T_{total} = \sum_{i=0}^{N} (t_{read} + t_{proc})
+  $$
+
+- **Com Threading (Paralelo):**
+  Como as operações ocorrem simultaneamente, o tempo por frame tende ao maior dos dois tempos (gargalo), e não à soma:
+  $$
+  T_{total} \approx \sum_{i=0}^{N} \max(t_{read}, t_{proc})
+  $$
+
+Isso elimina o *overhead* de I/O, permitindo que a IA utilize 100% dos recursos computacionais disponíveis.
+
+## 2. Backend de Inferência (MediaPipe vs OpenCV)
+
+Substituímos o detector padrão `opencv` (Haar Cascades) pelo backend `mediapipe` (Google BlazeFace) dentro do wrapper `DeepFace`.
+
+- **Haar Cascades:** Baseado em *features* artesanais e janelas deslizantes. Sensível à iluminação e rotação.
+- **BlazeFace (MediaPipe):** Rede Neural Leve (Lightweight CNN) desenhada para inferência em CPU móvel.
+
+**Vantagem:** O BlazeFace possui uma arquitetura SSD (Single Shot Detector) otimizada, oferecendo maior robustez a oclusões parciais e ângulos de face, com latência de inferência ($L_{inf}$) significativamente menor em CPUs:
+
+$$
+L_{inf}(MediaPipe) \ll L_{inf}(Haar) \quad \text{para resoluções } > 480p
+$$
+
+---
+
 # Passo A — Reconhecimento facial + Emoções (com robustez)
 
 Este passo implementa:
 
-- **Reconhecimento facial (detecção e marcação):** localizar rostos no vídeo e desenhar *bounding boxes*.
-- **Análise de expressões emocionais:** para cada rosto detectado, inferir a **emoção dominante** e exibir a etiqueta no vídeo.
+- **Reconhecimento facial:** Identificação biométrica comparando *encodings* (vetores de 128 dimensões).
+- **Análise de emoções:** Classificação de expressões faciais.
 
-Além do “básico”, o Passo A inclui três melhorias (“patches”) para tornar o pipeline mais **genérico**, **robusto** e menos dependente de **ajustes manuais**:
-
-1. **Autoajuste estatístico** (warm-up + percentis)  
-2. **Filtro por confiança do detector**  
-3. **Persistência temporal** (consistência no tempo)
-
----
+Além das otimizações acima, mantivemos os **3 Patches de Robustez** para filtrar ruído:
 
 ## Visão geral do pipeline
 
-O vídeo é lido frame a frame, mas a análise “pesada” é feita por **amostragem temporal**:
-
-- Definimos `FRAME_STEP = N`
-- Processamos apenas frames onde:
+O vídeo é lido via *buffer*, mas a análise “pesada” (DeepFace) segue uma amostragem temporal para economizar recursos:
 
 $$
 frame\_idx \bmod N = 0
 $$
 
-Isso reduz custo computacional **sem perder representatividade**, pois frames adjacentes tendem a ser muito parecidos.
-
-Em cada frame analisado:
-
-1. Detectamos faces com `DeepFace.extract_faces`, obtendo:
-   - *bounding box* `(x, y, w, h)`
-   - recorte do rosto (`face_crop`)
-   - `confidence` do detector
-2. Aplicamos filtros (patches) para reduzir falsos positivos.
-3. Estimamos emoção em cada `face_crop` com `DeepFace.analyze(actions=["emotion"])`.
-4. Desenhamos *bounding boxes* e emoção no vídeo e agregamos estatísticas.
+Onde $N$ é o `FRAME_STEP`.
 
 ---
 
-## Patch 1 — Autoajuste estatístico por warm-up (percentis)
+## Patch 1: Autoajuste de Limiares (Warm-up)
 
-### Problema
+Durante os primeiros `FRAMES_WARMUP` frames, coletamos estatísticas das detecções para definir o tamanho mínimo e máximo de um rosto aceitável naquele cenário específico.
 
-Se definirmos limiares fixos como:
-
-- “área mínima do rosto”
-- “área máxima do rosto”
-- “proporção largura/altura (*aspect ratio*)”
-
-…o sistema pode funcionar em um vídeo e falhar em outro, pois:
-
-- a câmera pode estar mais longe/perto  
-- a resolução muda  
-- o enquadramento muda  
-
-### Ideia
-
-Em vez de escolher limiares fixos “no chute”, usamos um **warm-up**:  
-coletamos amostras reais do próprio vídeo nos primeiros frames analisados e calculamos limites por **estatística robusta**.
-
-### O que coletamos
-
-Para cada face detectada no warm-up, coletamos:
-
-**Área da bounding box:**
+Calculamos os limiares dinamicamente usando **percentis**:
 
 $$
-A = w \times h
+MinArea = P_{10}(AmostrasArea) \\
+MaxArea = P_{95}(AmostrasArea)
 $$
-
-**Aspect Ratio (AR):**
-
-$$
-AR = \frac{w}{h}
-$$
-
-**Confiança do detector** (usada no Patch 2)
-
-### Por que área e AR?
-
-- Falsos positivos comuns (mão, telefone, objetos) tendem a ter áreas “fora do padrão” e **AR** muito “achatado” (muito largo/baixo) ou “estreito” (muito fino/alto).
-- Rostos reais costumam cair em faixas mais estáveis de área e proporção, dadas as condições do vídeo.
-
-### Como definimos os limiares (percentis)
-
-Depois de coletar um número suficiente de amostras, definimos:
-
-**Área mínima como percentil 10:**
-
-$$
-A_{min} = P_{10}(A)
-$$
-
-**Área máxima como percentil 95:**
-
-$$
-A_{max} = P_{95}(A)
-$$
-
-**AR mínimo como percentil 5:**
-
-$$
-AR_{min} = P_{5}(AR)
-$$
-
-**AR máximo como percentil 95:**
-
-$$
-AR_{max} = P_{95}(AR)
-$$
-
-### Por que percentis (e não média)?
-
-Percentis são **robustos a outliers**.
-
-Exemplo:
-
-- Se um falso positivo “tela inteira” aparecer, ele é um valor extremo.
-- A média seria puxada para cima (ruim).
-- O percentil 95 tende a manter um limite seguro sem “inflar” por um outlier.
-
-### Como o filtro funciona (após warm-up)
-
-Uma detecção só é aceita se:
-
-$$
-A_{min} \le A \le A_{max}
-$$
-
-e
-
-$$
-AR_{min} \le AR \le AR_{max}
-$$
-
-Isso torna o pipeline **autoajustável** a diferentes vídeos.
 
 ---
 
-## Patch 2 — Filtro por confiança do detector
+## Patch 2: Filtro por Confiança
 
-### Problema
-
-Mesmo com área e proporção plausíveis, o detector pode estar “na dúvida” e retornar falsas faces.
-
-O `DeepFace.extract_faces` retorna um valor de confiança:
-
-- \( confidence \in [0,1] \) (em geral)
-- Quanto maior, mais convicto o detector está de que a região é uma face.
-
-### Ideia
-
-Descartar detecções com confiança baixa.
-
-### Como definimos o limiar automaticamente
-
-Durante o warm-up, também coletamos `confidence` e definimos:
+Definimos um limiar de confiança $C_{min}$. Se a face detectada pela rede neural tiver score $C < C_{min}$, é descartada como falso positivo.
 
 $$
-conf_{min} = P_{20}(confidence)
+Face_{valida} \iff Confidence(Face) \ge C_{min}
 $$
-
-Ou seja: mantemos somente detecções acima de um limiar que reflete o “padrão do vídeo”, sem fixar um número absoluto.
-
-### Como o filtro funciona
-
-Uma face só é aceita se:
-
-$$
-confidence \ge conf_{min}
-$$
-
-Isso reduz falsos positivos como:
-
-- objetos com padrões parecidos com rosto
-- rostos parcialmente ocluídos em condições ruins (dependendo do objetivo)
 
 ---
 
-## Patch 3 — Persistência temporal (consistência ao longo do tempo)
+## Patch 3: Persistência Temporal
 
-### Problema
+Para evitar o efeito de "flickering" (rosto piscando na tela), exigimos consistência temporal.
 
-Muitos falsos positivos aparecem por 1 frame e somem no seguinte.
-
-Exemplos:
-
-- um objeto com sombra/ângulo específico em um frame único
-- um reflexo
-
-### Ideia
-
-Exigir que uma detecção seja consistente por pelo menos **K** frames analisados.
-
-### Como fazemos na prática
-
-Criamos um “id aproximado” da face baseado na posição da bounding box.
-
-Exemplo (quantização em grade):
-
-$$
-id = \left(\mathrm{round}\left(\frac{x}{20}\right), \ \mathrm{round}\left(\frac{y}{20}\right)\right)
-$$
-
-- Isso agrupa pequenas variações de posição como sendo a “mesma” face aproximada.
-- Guardamos os últimos IDs em um histórico.
-
-### Regra de persistência
-
-Só aceitamos a face se ela aparecer pelo menos **K** vezes no histórico:
-
-$$
-count(id) \ge K
-$$
-
-Com \(K=2\), por exemplo:
-
-- detecção que aparece em 1 frame e some → **é descartada**
-- rosto real (que persiste) → **é mantido**
-
-Isso melhora a estabilidade visual e reduz “caixas piscando”.
+1. Discretizamos a posição do centro da face $(c_x, c_y)$ em um **Grid** de tamanho $G$.
+2. Geramos um ID espacial aproximado:
+   $$
+   ID_{aprox} = \left( \text{round}\left(\frac{c_x}{G}\right), \text{round}\left(\frac{c_y}{G}\right) \right)
+   $$
+3. Só aceitamos a face se ela aparecer pelo menos **K** vezes no histórico recente:
+   $$
+   count(id) \ge K
+   $$
 
 ---
 
-## Agregação temporal das emoções (resumo parcial do Passo A)
+# Passo B — Detecção de Atividades (Pose Estimation)
 
-Para cada frame analisado e cada face válida, obtemos a emoção dominante \(e\) e incrementamos um contador:
+Utiliza **MediaPipe Pose** para extrair 33 *landmarks* corporais. A classificação é feita via **Heurísticas Geométricas** (sem necessidade de treino de nova rede), o que mantém o sistema leve.
 
-$$
-count(e) \leftarrow count(e) + 1
-$$
+As coordenadas são normalizadas $P(x, y)$, onde $y$ cresce de cima para baixo.
 
-Isso cria um “perfil emocional” ao longo do vídeo.
+## Heurística 1: Braços Levantados (Anomalia)
 
-### Por que agregação é importante?
-
-- Emoção em um frame isolado pode ser ruído.
-- A agregação temporal reduz a influência de instantes pontuais.
-
-## Agregação temporal das emoções (resumo parcial do Passo A)
-
-Para cada frame analisado e cada face válida, obtemos a emoção dominante \(e\) e incrementamos um contador:
+Consideramos "Braços Levantados" quando os punhos ($Wrist$) estão acima ($y$ menor) do nariz ($Nose$).
 
 $$
-count(e) \leftarrow count(e) + 1
+y_{LeftWrist} < y_{Nose} \quad \text{E} \quad y_{RightWrist} < y_{Nose}
 $$
 
-Isso cria um “perfil emocional” ao longo do vídeo.
+## Heurística 2: Mão no Rosto (Pensativo/Espanto)
 
-## Observação sobre áudio
+Calculamos a **Distância Euclidiana** $d$ entre o punho e o nariz. Se for menor que um limiar $\epsilon$ (0.15), classifica-se como mão no rosto.
 
-O OpenCV gera o vídeo anotado **sem trilha de áudio** (o `VideoWriter` não faz mux de áudio).  
-Isso não impacta a funcionalidade do desafio, pois a evidência visual (caixas e labels) é o foco do Passo A.
+$$
+d(P_1, P_2) = \sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}
+$$
+
+A condição é: $d(Wrist, Nose) < 0.15$.
+
+## Heurística 3: Braços Cruzados (Defensivo)
+
+Verificamos se os punhos estão na altura do tórax e se a distância horizontal entre eles é mínima (cruzamento):
+
+$$
+|x_{LeftWrist} - x_{RightWrist}| < 0.15
+$$
 
 ---
 
-## Resultado do Passo A
+# Passo C — Consolidação
 
-O Passo A gera:
+O resumo final processa os logs gerados (`stepA_summary.txt` e `stepB_summary.txt`) para gerar estatísticas consolidadas.
 
-- `outputs/stepA_annotated.mp4`: vídeo anotado com bounding boxes + emoção por face
-- `outputs/stepA_summary.txt`: resumo com:
-  - frames totais e frames analisados
-  - total de faces detectadas
-  - top emoções
+## Definição de Anomalia
+
+A métrica de anomalia $A$ é definida pela soma de ocorrências da classe "Braços Levantados" (movimento brusco/atípico):
+
+$$
+A_{total} = \sum_{i=0}^{N} [Class(frame_i) == Activity_{raised}]
+$$

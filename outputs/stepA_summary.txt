@@ -1,21 +1,6 @@
-=== PASSO A — Reconhecimento Facial + Emoções ===
-Vídeo: data/input.mp4
-Frames totais: 4295
-Frames analisados (amostragem, step=2): 2146
-Total de faces detectadas (após filtros): 1310
-Limiares finais:
-  MIN_AREA_FACE=14113
-  MAX_AREA_FACE=115600
-  MIN_AR=0.600
-  MAX_AR=1.600
-  MIN_CONFIANCA=0.910
-  K_PERSISTENCIA=2
-  TAMANHO_GRID=60
-
-Top emoções:
-- neutral: 474
-- angry: 355
-- sad: 259
-- fear: 112
-- happy: 71
-- surprise: 39
+=== RESUMO STEP A ===
+Faces Totais: 5
+- happy: 2
+- neutral: 1
+- sad: 1
+- angry: 1

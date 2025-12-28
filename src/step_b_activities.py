@@ -3,8 +3,10 @@ import os
 from collections import Counter
 from tqdm import tqdm
 
-# Importa utilitários do Step A (para abrir vídeo/writer) e do Step B
+# Importa utilitários do Step A (para abrir vídeo/writer)
 from utils_step_a import abrir_video, ler_metadados_video, criar_video_writer, garantir_diretorio, escrever_resumo
+
+# Importa utilitários do Step B (lógica das poses)
 from utils_step_b import iniciar_pose, classificar_atividade, desenhar_esqueleto, desenhar_atividade
 
 # ============================================================
@@ -16,9 +18,12 @@ def criar_config_b():
         "VIDEO_ENTRADA": "outputs/stepA_annotated.mp4", 
         "VIDEO_SAIDA": "outputs/stepB_final.mp4",
         "RESUMO_SAIDA": "outputs/stepB_summary.txt",
-        "FRAME_STEP": 1 # Analisa todo frame ou pula para performance? (1 = todos)
+        "FRAME_STEP": 1 
     }
 
+# ============================================================
+# FUNÇÃO PRINCIPAL (QUE ESTAVA FALTANDO)
+# ============================================================
 def run_activities():
     cfg = criar_config_b()
     
