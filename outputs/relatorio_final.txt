@@ -5,23 +5,30 @@
 1. RESUMO EXECUTIVO
 -------------------
 O vídeo foi processado para análise comportamental e emocional.
-⚠️ ALERTA: Foram detectadas 4 ocorrências de anomalia (Gestos Bruscos/Braços Levantados).
+⚠️ ALERTA: Foram detectadas 5 ocorrências de anomalia (Gestos Bruscos/Braços Levantados).
 Recomenda-se revisão humana nesses trechos.
 
 2. ANÁLISE DE ATIVIDADES (STEP B)
 ---------------------------------
-- Bracos Cruzados/Fechado: 1150 frames
-- Mao no Rosto/Pensativo: 381 frames
-- Maos Juntas: 260 frames
-- Bracos Levantados: 4 frames
+- Bracos Cruzados/Fechado: 1043 frames
+- Mao no Rosto/Pensativo: 594 frames
+- Maos Juntas: 233 frames
+- Bracos Levantados: 5 frames
 
 3. ANÁLISE EMOCIONAL (STEP A)
 -----------------------------
 Distribuição das emoções detectadas nos rostos:
-- happy: 2
-- neutral: 1
-- sad: 1
-- angry: 1
+- MAX_AREA_FACE: 125705
+- MIN_AREA_FACE: 14400
+- neutral: 268
+- angry: 224
+- sad: 152
+- fear: 64
+- happy: 38
+- surprise: 20
+- MAX_AR: 1
+- MIN_AR: 0
+- MIN_CONFIANCA: 0
 
 ========================================
 Gerado automaticamente pelo Pipeline IADT.

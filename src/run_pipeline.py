@@ -6,7 +6,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from step_a_faces_emotions import run_faces_emotions
 from step_b_activities import run_activities
-# Se você salvou o arquivo anterior como step_c_summary.py:
 from step_c_summary import gerar_relatorio 
 
 def main():
