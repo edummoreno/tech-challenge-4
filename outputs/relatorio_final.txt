@@ -1,0 +1,41 @@
+========================================
+   RELATÓRIO FINAL - TECH CHALLENGE 4   
+========================================
+
+📊 CONTEXTO DE PROCESSAMENTO
+
+- Total de frames do vídeo: 3951
+
+Step A — Emoções e Faces:
+- Frames analisados: 1317
+- Estratégia: amostragem temporal (1 a cada 3 frames)
+
+Step B — Atividades Corporais:
+- Frames analisados: 3951
+- Estratégia: análise frame a frame
+
+1. RESUMO EXECUTIVO
+-------------------
+O vídeo foi processado para análise comportamental e emocional.
+⚠️ ALERTA: Foram detectadas 6 ocorrências de anomalia (Gestos Bruscos/Braços Levantados).
+Recomenda-se revisão humana nesses trechos.
+
+2. ANÁLISE DE ATIVIDADES (STEP B)
+---------------------------------
+- Bracos Cruzados/Fechado: 984 frames
+- Mao no Rosto/Pensativo: 253 frames
+- Maos Juntas: 215 frames
+- Bracos Levantados: 6 frames
+
+3. ANÁLISE EMOCIONAL (STEP A)
+-----------------------------
+Distribuição das emoções detectadas nos rostos:
+- neutral: 259
+- angry: 198
+- sad: 161
+- fear: 55
+- happy: 43
+- surprise: 15
+
+========================================
+Gerado automaticamente pelo Pipeline IADT.

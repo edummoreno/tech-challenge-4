@@ -1,0 +1,8 @@
+=== PASSO B — Detecção de Atividades ===
+Total Frames: 3951
+Contagem de Atividades:
+- Em Atividade (Geral): 1973 frames
+- Bracos Cruzados/Fechado: 984 frames
+- Mao no Rosto/Pensativo: 253 frames
+- Maos Juntas: 215 frames
+- Bracos Levantados: 6 frames

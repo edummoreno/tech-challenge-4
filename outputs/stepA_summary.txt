@@ -1,0 +1,24 @@
+=== RESUMO ===
+video: data/input.mp4
+frames_totais: 3951
+frames_analisados: 1317
+frame_step: 3
+total_faces: 731
+
+Emocoes (contagem):
+- neutral: 259
+- angry: 198
+- sad: 161
+- fear: 55
+- happy: 43
+- surprise: 15
+
+Limiar (final):
+- MIN_AREA_FACE: 12100
+- MAX_AREA_FACE: 119394
+- MIN_AR: 0.6
+- MAX_AR: 1.6
+- MIN_CONFIANCA: 0.92
+
+K Persistencia: 2
+Tamanho Grid: 60
